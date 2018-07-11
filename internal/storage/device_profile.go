@@ -2,6 +2,7 @@ package storage
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/gob"
 	"fmt"
 	"time"
@@ -60,7 +61,8 @@ func CreateDeviceProfile(db sqlx.Execer, dp *DeviceProfile) error {
 	dp.CreatedAt = now
 	dp.UpdatedAt = now
 
-	_, err := db.Exec(`
+	err := queryTimer("create_device_profile", func() error {
+		_, err := db.Exec(`
         insert into device_profile (
             created_at,
             updated_at,
@@ -86,29 +88,32 @@ func CreateDeviceProfile(db sqlx.Execer, dp *DeviceProfile) error {
             rf_region,
             supports_32bit_fcnt
         ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)`,
-		dp.CreatedAt,
-		dp.UpdatedAt,
-		dp.ID,
-		dp.SupportsClassB,
-		dp.ClassBTimeout,
-		dp.PingSlotPeriod,
-		dp.PingSlotDR,
-		dp.PingSlotFreq,
-		dp.SupportsClassC,
-		dp.ClassCTimeout,
-		dp.MACVersion,
-		dp.RegParamsRevision,
-		dp.RXDelay1,
-		dp.RXDROffset1,
-		dp.RXDataRate2,
-		dp.RXFreq2,
-		pq.Array(dp.FactoryPresetFreqs),
-		dp.MaxEIRP,
-		dp.MaxDutyCycle,
-		dp.SupportsJoin,
-		dp.RFRegion,
-		dp.Supports32bitFCnt,
-	)
+			dp.CreatedAt,
+			dp.UpdatedAt,
+			dp.ID,
+			dp.SupportsClassB,
+			dp.ClassBTimeout,
+			dp.PingSlotPeriod,
+			dp.PingSlotDR,
+			dp.PingSlotFreq,
+			dp.SupportsClassC,
+			dp.ClassCTimeout,
+			dp.MACVersion,
+			dp.RegParamsRevision,
+			dp.RXDelay1,
+			dp.RXDROffset1,
+			dp.RXDataRate2,
+			dp.RXFreq2,
+			pq.Array(dp.FactoryPresetFreqs),
+			dp.MaxEIRP,
+			dp.MaxDutyCycle,
+			dp.SupportsJoin,
+			dp.RFRegion,
+			dp.Supports32bitFCnt,
+		)
+		return err
+	})
+
 	if err != nil {
 		return handlePSQLError(err, "insert error")
 	}
@@ -137,7 +142,10 @@ func CreateDeviceProfileCache(p *redis.Pool, dp DeviceProfile) error {
 	key := fmt.Sprintf(DeviceProfileKeyTempl, dp.ID)
 	exp := int64(config.C.NetworkServer.DeviceSessionTTL) / int64(time.Millisecond)
 
-	_, err := c.Do("PSETEX", key, exp, buf.Bytes())
+	err := queryTimer("create_devic_profile_cache", func() error {
+		_, err := c.Do("PSETEX", key, exp, buf.Bytes())
+		return err
+	})
 	if err != nil {
 		return errors.Wrap(err, "set device-profile error")
 	}
@@ -148,12 +156,17 @@ func CreateDeviceProfileCache(p *redis.Pool, dp DeviceProfile) error {
 // GetDeviceProfileCache returns a cached device-profile.
 func GetDeviceProfileCache(p *redis.Pool, id uuid.UUID) (DeviceProfile, error) {
 	var dp DeviceProfile
+	var val []byte
 	key := fmt.Sprintf(DeviceProfileKeyTempl, id)
 
 	c := p.Get()
 	defer c.Close()
 
-	val, err := redis.Bytes(c.Do("GET", key))
+	err := queryTimer("get_device_profile_cache", func() error {
+		var err error
+		val, err = redis.Bytes(c.Do("GET", key))
+		return err
+	})
 	if err != nil {
 		if err == redis.ErrNil {
 			return dp, ErrDoesNotExist
@@ -175,7 +188,10 @@ func FlushDeviceProfileCache(p *redis.Pool, id uuid.UUID) error {
 	c := p.Get()
 	defer c.Close()
 
-	_, err := c.Do("DEL", key)
+	err := queryTimer("flush_device_profile_cache", func() error {
+		_, err := c.Do("DEL", key)
+		return err
+	})
 	if err != nil {
 		return errors.Wrap(err, "delete error")
 	}
@@ -216,8 +232,10 @@ func GetAndCacheDeviceProfile(db sqlx.Queryer, p *redis.Pool, id uuid.UUID) (Dev
 // GetDeviceProfile returns the device-profile matching the given id.
 func GetDeviceProfile(db sqlx.Queryer, id uuid.UUID) (DeviceProfile, error) {
 	var dp DeviceProfile
+	var factoryPresetFreqs []int64
 
-	row := db.QueryRowx(`
+	err := queryTimer("get_device_profile", func() error {
+		row := db.QueryRowx(`
         select
             created_at,
             updated_at,
@@ -247,32 +265,32 @@ func GetDeviceProfile(db sqlx.Queryer, id uuid.UUID) (DeviceProfile, error) {
             device_profile_id = $1
         `, id)
 
-	var factoryPresetFreqs []int64
+		return row.Scan(
+			&dp.CreatedAt,
+			&dp.UpdatedAt,
+			&dp.ID,
+			&dp.SupportsClassB,
+			&dp.ClassBTimeout,
+			&dp.PingSlotPeriod,
+			&dp.PingSlotDR,
+			&dp.PingSlotFreq,
+			&dp.SupportsClassC,
+			&dp.ClassCTimeout,
+			&dp.MACVersion,
+			&dp.RegParamsRevision,
+			&dp.RXDelay1,
+			&dp.RXDROffset1,
+			&dp.RXDataRate2,
+			&dp.RXFreq2,
+			pq.Array(&factoryPresetFreqs),
+			&dp.MaxEIRP,
+			&dp.MaxDutyCycle,
+			&dp.SupportsJoin,
+			&dp.RFRegion,
+			&dp.Supports32bitFCnt,
+		)
+	})
 
-	err := row.Scan(
-		&dp.CreatedAt,
-		&dp.UpdatedAt,
-		&dp.ID,
-		&dp.SupportsClassB,
-		&dp.ClassBTimeout,
-		&dp.PingSlotPeriod,
-		&dp.PingSlotDR,
-		&dp.PingSlotFreq,
-		&dp.SupportsClassC,
-		&dp.ClassCTimeout,
-		&dp.MACVersion,
-		&dp.RegParamsRevision,
-		&dp.RXDelay1,
-		&dp.RXDROffset1,
-		&dp.RXDataRate2,
-		&dp.RXFreq2,
-		pq.Array(&factoryPresetFreqs),
-		&dp.MaxEIRP,
-		&dp.MaxDutyCycle,
-		&dp.SupportsJoin,
-		&dp.RFRegion,
-		&dp.Supports32bitFCnt,
-	)
 	if err != nil {
 		return dp, handlePSQLError(err, "select error")
 	}
@@ -287,8 +305,11 @@ func GetDeviceProfile(db sqlx.Queryer, id uuid.UUID) (DeviceProfile, error) {
 // UpdateDeviceProfile updates the given device-profile.
 func UpdateDeviceProfile(db sqlx.Execer, dp *DeviceProfile) error {
 	dp.UpdatedAt = time.Now()
+	var res sql.Result
 
-	res, err := db.Exec(`
+	err := queryTimer("update_device_profile", func() error {
+		var err error
+		res, err = db.Exec(`
         update device_profile set
             updated_at = $2,
 
@@ -313,28 +334,31 @@ func UpdateDeviceProfile(db sqlx.Execer, dp *DeviceProfile) error {
             supports_32bit_fcnt = $21
         where
             device_profile_id = $1`,
-		dp.ID,
-		dp.UpdatedAt,
-		dp.SupportsClassB,
-		dp.ClassBTimeout,
-		dp.PingSlotPeriod,
-		dp.PingSlotDR,
-		dp.PingSlotFreq,
-		dp.SupportsClassC,
-		dp.ClassCTimeout,
-		dp.MACVersion,
-		dp.RegParamsRevision,
-		dp.RXDelay1,
-		dp.RXDROffset1,
-		dp.RXDataRate2,
-		dp.RXFreq2,
-		pq.Array(dp.FactoryPresetFreqs),
-		dp.MaxEIRP,
-		dp.MaxDutyCycle,
-		dp.SupportsJoin,
-		dp.RFRegion,
-		dp.Supports32bitFCnt,
-	)
+			dp.ID,
+			dp.UpdatedAt,
+			dp.SupportsClassB,
+			dp.ClassBTimeout,
+			dp.PingSlotPeriod,
+			dp.PingSlotDR,
+			dp.PingSlotFreq,
+			dp.SupportsClassC,
+			dp.ClassCTimeout,
+			dp.MACVersion,
+			dp.RegParamsRevision,
+			dp.RXDelay1,
+			dp.RXDROffset1,
+			dp.RXDataRate2,
+			dp.RXFreq2,
+			pq.Array(dp.FactoryPresetFreqs),
+			dp.MaxEIRP,
+			dp.MaxDutyCycle,
+			dp.SupportsJoin,
+			dp.RFRegion,
+			dp.Supports32bitFCnt,
+		)
+		return err
+	})
+
 	if err != nil {
 		return handlePSQLError(err, "update error")
 	}
@@ -352,7 +376,14 @@ func UpdateDeviceProfile(db sqlx.Execer, dp *DeviceProfile) error {
 
 // DeleteDeviceProfile deletes the device-profile matching the given id.
 func DeleteDeviceProfile(db sqlx.Execer, id uuid.UUID) error {
-	res, err := db.Exec("delete from device_profile where device_profile_id = $1", id)
+	var res sql.Result
+
+	err := queryTimer("delete_device_profile", func() error {
+		var err error
+		res, err = db.Exec("delete from device_profile where device_profile_id = $1", id)
+		return err
+	})
+
 	if err != nil {
 		return handlePSQLError(err, "delete error")
 	}

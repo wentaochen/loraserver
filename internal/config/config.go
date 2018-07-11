@@ -125,6 +125,13 @@ type Config struct {
 		TLSCert string `mapstructure:"tls_cert"`
 		TLSKey  string `mapstructure:"tls_key"`
 	} `mapstructure:"network_controller"`
+
+	Metrics struct {
+		Prometheus struct {
+			Enabled bool
+			Bind    string
+		}
+	}
 }
 
 // SpreadFactorToRequiredSNRTable contains the required SNR to demodulate a

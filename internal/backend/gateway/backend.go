@@ -12,17 +12,45 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/brocaar/loraserver/api/gw"
-	"github.com/brocaar/loraserver/internal/backend"
-	"github.com/brocaar/lorawan"
 	"github.com/eclipse/paho.mqtt.golang"
 	"github.com/garyburd/redigo/redis"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/brocaar/loraserver/api/gw"
+	"github.com/brocaar/loraserver/internal/backend"
+	"github.com/brocaar/loraserver/internal/metrics"
+	"github.com/brocaar/lorawan"
 )
 
 const uplinkLockTTL = time.Millisecond * 500
 const statsLockTTL = time.Millisecond * 500
+
+var receivedCounter func(string)
+var sentTimer func(string, func() error) error
+
+func init() {
+	counter := metrics.MustRegisterNewCounter(
+		"backend_gateway_messages_received",
+		"Total number of received messages by the configured gateway backend.",
+		[]string{"type"},
+	)
+
+	receivedCounter = func(typ string) {
+		counter(prometheus.Labels{"type": typ})
+	}
+
+	timer := metrics.MustRegisterNewTimerWithError(
+		"backend_gateway_messages_sent",
+		"Messages sent duration tracking of the gateway backend.",
+		[]string{"type"},
+	)
+
+	sentTimer = func(typ string, f func() error) error {
+		return timer(prometheus.Labels{"type": typ}, f)
+	}
+}
 
 // MQTTBackendConfig holds the MQTT backend configuration.
 type MQTTBackendConfig struct {
@@ -203,8 +231,13 @@ func (b *MQTTBackend) SendTXPacket(txPacket gw.TXPacket) error {
 		"qos":   b.config.QOS,
 	}).Info("backend/gateway: publishing tx packet")
 
-	if token := b.conn.Publish(topic.String(), b.config.QOS, false, bb); token.Wait() && token.Error() != nil {
-		return fmt.Errorf("backend/gateway: publish tx packet failed: %s", token.Error())
+	err = sentTimer("downlink", func() error {
+		token := b.conn.Publish(topic.String(), b.config.QOS, false, bb)
+		token.Wait()
+		return token.Error()
+	})
+	if err != nil {
+		return fmt.Errorf("backend/gateway: publish tx packet failed: %s", err)
 	}
 	return nil
 }
@@ -225,7 +258,12 @@ func (b *MQTTBackend) SendGatewayConfigPacket(configPacket gw.GatewayConfigPacke
 		"qos":   b.config.QOS,
 	}).Info("backend/gateway: publishing config packet")
 
-	if token := b.conn.Publish(topic.String(), b.config.QOS, false, bb); token.Wait() && token.Error() != nil {
+	err = sentTimer("config", func() error {
+		token := b.conn.Publish(topic.String(), b.config.QOS, false, bb)
+		token.Wait()
+		return token.Error()
+	})
+	if err != nil {
 		return errors.Wrap(err, "backend/gateway: publish config packet error")
 	}
 
@@ -276,6 +314,8 @@ func (b *MQTTBackend) rxPacketHandler(c mqtt.Client, msg mqtt.Message) {
 		return
 	}
 
+	receivedCounter("uplink")
+
 	b.rxPacketChan <- gw.RXPacket{
 		RXInfo:     rxPacketBytes.RXInfo,
 		PHYPayload: phy,
@@ -312,6 +352,8 @@ func (b *MQTTBackend) statsPacketHandler(c mqtt.Client, msg mqtt.Message) {
 		log.Errorf("backend/gateway: acquire stats lock error: %s", err)
 		return
 	}
+
+	receivedCounter("stats")
 
 	log.WithField("mac", statsPacket.MAC).Info("backend/gateway: gateway stats packet received")
 	b.statsPacketChan <- statsPacket

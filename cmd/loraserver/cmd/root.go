@@ -74,6 +74,7 @@ func init() {
 	viper.SetDefault("network_server.gateway.backend.mqtt.ack_topic_template", "gateway/+/ack")
 	viper.SetDefault("network_server.gateway.backend.mqtt.config_topic_template", "gateway/{{ .MAC }}/config")
 	viper.SetDefault("network_server.gateway.backend.mqtt.clean_session", true)
+	viper.SetDefault("metrics.prometheus.bind", "0.0.0.0:8004")
 
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(configCmd)
