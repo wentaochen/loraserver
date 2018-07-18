@@ -11,7 +11,7 @@ var (
 
 func init() {
 	qt := metrics.MustRegisterNewTimerWithError(
-		"storage_function_query_duration",
+		"storage_function_query",
 		"Per internal/storage function query duration tracking.",
 		[]string{"function"},
 	)

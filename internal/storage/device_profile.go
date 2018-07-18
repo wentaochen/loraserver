@@ -63,31 +63,31 @@ func CreateDeviceProfile(db sqlx.Execer, dp *DeviceProfile) error {
 
 	err := queryTimer("create_device_profile", func() error {
 		_, err := db.Exec(`
-        insert into device_profile (
-            created_at,
-            updated_at,
+			insert into device_profile (
+				created_at,
+				updated_at,
 
-            device_profile_id,
-            supports_class_b,
-            class_b_timeout,
-            ping_slot_period,
-            ping_slot_dr,
-            ping_slot_freq,
-            supports_class_c,
-            class_c_timeout,
-            mac_version,
-            reg_params_revision,
-            rx_delay_1,
-            rx_dr_offset_1,
-            rx_data_rate_2,
-            rx_freq_2,
-            factory_preset_freqs,
-            max_eirp,
-            max_duty_cycle,
-            supports_join,
-            rf_region,
-            supports_32bit_fcnt
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)`,
+				device_profile_id,
+				supports_class_b,
+				class_b_timeout,
+				ping_slot_period,
+				ping_slot_dr,
+				ping_slot_freq,
+				supports_class_c,
+				class_c_timeout,
+				mac_version,
+				reg_params_revision,
+				rx_delay_1,
+				rx_dr_offset_1,
+				rx_data_rate_2,
+				rx_freq_2,
+				factory_preset_freqs,
+				max_eirp,
+				max_duty_cycle,
+				supports_join,
+				rf_region,
+				supports_32bit_fcnt
+			) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)`,
 			dp.CreatedAt,
 			dp.UpdatedAt,
 			dp.ID,
@@ -142,7 +142,7 @@ func CreateDeviceProfileCache(p *redis.Pool, dp DeviceProfile) error {
 	key := fmt.Sprintf(DeviceProfileKeyTempl, dp.ID)
 	exp := int64(config.C.NetworkServer.DeviceSessionTTL) / int64(time.Millisecond)
 
-	err := queryTimer("create_devic_profile_cache", func() error {
+	err := queryTimer("create_device_profile_cache", func() error {
 		_, err := c.Do("PSETEX", key, exp, buf.Bytes())
 		return err
 	})
@@ -236,33 +236,33 @@ func GetDeviceProfile(db sqlx.Queryer, id uuid.UUID) (DeviceProfile, error) {
 
 	err := queryTimer("get_device_profile", func() error {
 		row := db.QueryRowx(`
-        select
-            created_at,
-            updated_at,
+			select
+				created_at,
+				updated_at,
 
-            device_profile_id,
-            supports_class_b,
-            class_b_timeout,
-            ping_slot_period,
-            ping_slot_dr,
-            ping_slot_freq,
-            supports_class_c,
-            class_c_timeout,
-            mac_version,
-            reg_params_revision,
-            rx_delay_1,
-            rx_dr_offset_1,
-            rx_data_rate_2,
-            rx_freq_2,
-            factory_preset_freqs,
-            max_eirp,
-            max_duty_cycle,
-            supports_join,
-            rf_region,
-            supports_32bit_fcnt
-        from device_profile
-        where
-            device_profile_id = $1
+				device_profile_id,
+				supports_class_b,
+				class_b_timeout,
+				ping_slot_period,
+				ping_slot_dr,
+				ping_slot_freq,
+				supports_class_c,
+				class_c_timeout,
+				mac_version,
+				reg_params_revision,
+				rx_delay_1,
+				rx_dr_offset_1,
+				rx_data_rate_2,
+				rx_freq_2,
+				factory_preset_freqs,
+				max_eirp,
+				max_duty_cycle,
+				supports_join,
+				rf_region,
+				supports_32bit_fcnt
+			from device_profile
+			where
+				device_profile_id = $1
         `, id)
 
 		return row.Scan(
@@ -310,30 +310,30 @@ func UpdateDeviceProfile(db sqlx.Execer, dp *DeviceProfile) error {
 	err := queryTimer("update_device_profile", func() error {
 		var err error
 		res, err = db.Exec(`
-        update device_profile set
-            updated_at = $2,
+			update device_profile set
+				updated_at = $2,
 
-            supports_class_b = $3,
-            class_b_timeout = $4,
-            ping_slot_period = $5,
-            ping_slot_dr = $6,
-            ping_slot_freq = $7,
-            supports_class_c = $8,
-            class_c_timeout = $9,
-            mac_version = $10,
-            reg_params_revision = $11,
-            rx_delay_1 = $12,
-            rx_dr_offset_1 = $13,
-            rx_data_rate_2 = $14,
-            rx_freq_2 = $15,
-            factory_preset_freqs = $16,
-            max_eirp = $17,
-            max_duty_cycle = $18,
-            supports_join = $19,
-            rf_region = $20,
-            supports_32bit_fcnt = $21
-        where
-            device_profile_id = $1`,
+				supports_class_b = $3,
+				class_b_timeout = $4,
+				ping_slot_period = $5,
+				ping_slot_dr = $6,
+				ping_slot_freq = $7,
+				supports_class_c = $8,
+				class_c_timeout = $9,
+				mac_version = $10,
+				reg_params_revision = $11,
+				rx_delay_1 = $12,
+				rx_dr_offset_1 = $13,
+				rx_data_rate_2 = $14,
+				rx_freq_2 = $15,
+				factory_preset_freqs = $16,
+				max_eirp = $17,
+				max_duty_cycle = $18,
+				supports_join = $19,
+				rf_region = $20,
+				supports_32bit_fcnt = $21
+			where
+				device_profile_id = $1`,
 			dp.ID,
 			dp.UpdatedAt,
 			dp.SupportsClassB,
