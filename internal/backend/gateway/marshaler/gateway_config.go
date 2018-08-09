@@ -21,7 +21,9 @@ func MarshalGatewayConfiguration(t Type, gc gw.GatewayConfiguration) ([]byte, er
 		b, err = proto.Marshal(&gc)
 	case JSON:
 		var str string
-		m := &jsonpb.Marshaler{}
+		m := &jsonpb.Marshaler{
+			EmitDefaults: true,
+		}
 		str, err = m.MarshalToString(&gc)
 		b = []byte(str)
 	case V2JSON:

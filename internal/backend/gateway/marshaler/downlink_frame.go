@@ -23,7 +23,9 @@ func MarshalDownlinkFrame(t Type, df gw.DownlinkFrame) ([]byte, error) {
 		b, err = proto.Marshal(&df)
 	case JSON:
 		var str string
-		m := &jsonpb.Marshaler{}
+		m := &jsonpb.Marshaler{
+			EmitDefaults: true,
+		}
 		str, err = m.MarshalToString(&df)
 		b = []byte(str)
 	case V2JSON:
