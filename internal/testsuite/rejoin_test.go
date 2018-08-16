@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/garyburd/redigo/redis"
+	"github.com/gomodule/redigo/redis"
 	"github.com/jmoiron/sqlx"
 	. "github.com/smartystreets/goconvey/convey"
 

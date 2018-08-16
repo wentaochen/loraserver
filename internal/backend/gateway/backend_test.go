@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"github.com/garyburd/redigo/redis"
 	"github.com/golang/protobuf/proto"
+	"github.com/gomodule/redigo/redis"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"

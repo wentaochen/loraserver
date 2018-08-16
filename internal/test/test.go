@@ -4,8 +4,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/garyburd/redigo/redis"
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/gomodule/redigo/redis"
 	"github.com/jmoiron/sqlx"
 	migrate "github.com/rubenv/sql-migrate"
 	log "github.com/sirupsen/logrus"

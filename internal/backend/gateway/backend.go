@@ -12,8 +12,8 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/eclipse/paho.mqtt.golang"
-	"github.com/garyburd/redigo/redis"
+	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/gomodule/redigo/redis"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
