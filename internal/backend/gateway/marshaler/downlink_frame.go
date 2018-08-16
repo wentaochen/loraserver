@@ -44,7 +44,7 @@ func MarshalDownlinkFrame(t Type, df gw.DownlinkFrame) ([]byte, error) {
 		copy(txPacket.TXInfo.MAC[:], df.TxInfo.GatewayId)
 
 		if df.TxInfo.TimeSinceGpsEpoch != nil {
-			if dur, err := ptypes.Duration(df.TxInfo.TimeSinceGpsEpoch); err != nil {
+			if dur, err := ptypes.Duration(df.TxInfo.TimeSinceGpsEpoch); err == nil {
 				gwDur := gw.Duration(dur)
 				txPacket.TXInfo.TimeSinceGPSEpoch = &gwDur
 			}
