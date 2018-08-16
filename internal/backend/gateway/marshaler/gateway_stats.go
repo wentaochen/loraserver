@@ -17,9 +17,9 @@ import (
 func UnmarshalGatewayStats(b []byte, stats *gw.GatewayStats) (Type, error) {
 	var t Type
 
-	if strings.Contains(string(b), "mac") {
+	if strings.Contains(string(b), `"mac"`) {
 		t = V2JSON
-	} else if strings.Contains(string(b), "gatewayID") {
+	} else if strings.Contains(string(b), `"gatewayID"`) {
 		t = JSON
 	} else {
 		t = Protobuf
