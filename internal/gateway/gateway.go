@@ -8,6 +8,7 @@ import (
 	"github.com/brocaar/loraserver/api/gw"
 	"github.com/brocaar/loraserver/internal/config"
 	"github.com/brocaar/loraserver/internal/storage"
+	"github.com/brocaar/lorawan"
 )
 
 // StatsHandler represents a stat handler for incoming gateway stats.
@@ -43,8 +44,15 @@ func handleStatsPackets(wg *sync.WaitGroup) {
 		go func(stats gw.GatewayStats) {
 			wg.Add(1)
 			defer wg.Done()
+
 			if err := storage.HandleGatewayStatsPacket(config.C.PostgreSQL.DB, stats); err != nil {
-				log.Errorf("handle stats packet error: %s", err)
+				log.WithError(err).Error("handle stats packet error")
+			}
+
+			var gatewayID lorawan.EUI64
+			copy(gatewayID[:], stats.GatewayId)
+			if err := storage.FlushGatewayCache(config.C.Redis.Pool, gatewayID); err != nil {
+				log.WithError(err).Error("flush gateway cache error")
 			}
 		}(statsPacket)
 	}

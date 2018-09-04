@@ -1,18 +1,27 @@
 package storage
 
 import (
+	"bytes"
 	"database/sql/driver"
+	"encoding/gob"
 	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/gofrs/uuid"
+	"github.com/gomodule/redigo/redis"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/brocaar/loraserver/internal/config"
 	"github.com/brocaar/lorawan"
+)
+
+// tempaltes used for generating Redis keys
+const (
+	gatewayKeyTempl = "lora:ns:gw:%s"
 )
 
 // GPSPoint contains a GPS point.
@@ -94,6 +103,97 @@ func CreateGateway(db sqlx.Execer, gw *Gateway) error {
 	gw.UpdatedAt = now
 	log.WithField("gateway_id", gw.GatewayID).Info("gateway created")
 	return nil
+}
+
+// CreateGatewayCache caches the given gateway in Redis.
+// The TTL of the gateway is the same as that of the device-sessions.
+func CreateGatewayCache(p *redis.Pool, gw Gateway) error {
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(gw); err != nil {
+		return errors.Wrap(err, "gob encode gateway error")
+	}
+
+	c := p.Get()
+	defer c.Close()
+
+	key := fmt.Sprintf(gatewayKeyTempl, gw.GatewayID)
+	exp := int64(config.C.NetworkServer.DeviceSessionTTL) / int64(time.Millisecond)
+
+	_, err := c.Do("PSETEX", key, exp, buf.Bytes())
+	if err != nil {
+		return errors.Wrap(err, "set gateway error")
+	}
+
+	return nil
+}
+
+// GetGatewayCache returns a cached gateway.
+func GetGatewayCache(p *redis.Pool, gatewayID lorawan.EUI64) (Gateway, error) {
+	var gw Gateway
+	key := fmt.Sprintf(gatewayKeyTempl, gatewayID)
+
+	c := p.Get()
+	defer c.Close()
+
+	val, err := redis.Bytes(c.Do("GET", key))
+	if err != nil {
+		if err == redis.ErrNil {
+			return gw, ErrDoesNotExist
+		}
+		return gw, errors.Wrap(err, "get error")
+	}
+
+	err = gob.NewDecoder(bytes.NewReader(val)).Decode(&gw)
+	if err != nil {
+		return gw, errors.Wrap(err, "gob decode error")
+	}
+
+	return gw, nil
+}
+
+// FlushGatewayCache deletes a cached gateway.
+func FlushGatewayCache(p *redis.Pool, gatewayID lorawan.EUI64) error {
+	key := fmt.Sprintf(gatewayKeyTempl, gatewayID)
+	c := p.Get()
+	defer c.Close()
+
+	_, err := c.Do("DEL", key)
+	if err != nil {
+		return errors.Wrap(err, "delete error")
+	}
+
+	return nil
+}
+
+// GetAndCacheGateway returns a gateway from the cache in case it is available.
+// In case the gateway is not cached, it will be retrieved from the database
+// and then cached.
+func GetAndCacheGateway(db sqlx.Queryer, p *redis.Pool, gatewayID lorawan.EUI64) (Gateway, error) {
+	gw, err := GetGatewayCache(p, gatewayID)
+	if err == nil {
+		return gw, nil
+	}
+
+	if err != ErrDoesNotExist {
+		log.WithFields(log.Fields{
+			"gateway_id": gatewayID,
+		}).WithError(err).Error("get gateway cache error")
+		// we don't return the error as we can still fall-back onto db retrieval
+	}
+
+	gw, err = GetGateway(db, gatewayID)
+	if err != nil {
+		return gw, errors.Wrap(err, "get gateway error")
+	}
+
+	err = CreateGatewayCache(p, gw)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"gateway_id": gatewayID,
+		}).WithError(err).Error("create gateway cache error")
+	}
+
+	return gw, nil
 }
 
 // GetGateway returns the gateway for the given Gateway ID.

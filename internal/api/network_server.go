@@ -927,8 +927,11 @@ func (n *NetworkServerAPI) UpdateGateway(ctx context.Context, req *ns.UpdateGate
 	}
 	gw.Altitude = req.Gateway.Location.Altitude
 
-	err = storage.UpdateGateway(config.C.PostgreSQL.DB, &gw)
-	if err != nil {
+	if err = storage.FlushGatewayCache(config.C.Redis.Pool, gw.GatewayID); err != nil {
+		return nil, errToRPCError(err)
+	}
+
+	if err = storage.UpdateGateway(config.C.PostgreSQL.DB, &gw); err != nil {
 		return nil, errToRPCError(err)
 	}
 
@@ -940,8 +943,11 @@ func (n *NetworkServerAPI) DeleteGateway(ctx context.Context, req *ns.DeleteGate
 	var id lorawan.EUI64
 	copy(id[:], req.Id)
 
-	err := storage.DeleteGateway(config.C.PostgreSQL.DB, id)
-	if err != nil {
+	if err := storage.FlushGatewayCache(config.C.Redis.Pool, id); err != nil {
+		return nil, errToRPCError(err)
+	}
+
+	if err := storage.DeleteGateway(config.C.PostgreSQL.DB, id); err != nil {
 		return nil, errToRPCError(err)
 	}
 
