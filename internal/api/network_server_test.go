@@ -816,6 +816,8 @@ func TestNetworkServerAPI(t *testing.T) {
 							Longitude: 1.1236,
 							Altitude:  15.7,
 						},
+						FpgaId:              []byte{8, 7, 6, 5, 4, 3, 2, 1},
+						FineTimestampAesKey: []byte{8, 7, 6, 5, 4, 3, 2, 1, 8, 7, 6, 5, 4, 3, 2, 1},
 					},
 				}
 				_, err := api.UpdateGateway(ctx, &req)

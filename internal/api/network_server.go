@@ -823,21 +823,36 @@ func (n *NetworkServerAPI) CreateGateway(ctx context.Context, req *ns.CreateGate
 		return nil, grpc.Errorf(codes.InvalidArgument, "gateway.location must not be nil")
 	}
 
-	var id lorawan.EUI64
-	var gpID uuid.UUID
-	copy(id[:], req.Gateway.Id)
-	copy(gpID[:], req.Gateway.GatewayProfileId)
-
 	gw := storage.Gateway{
-		GatewayID: id,
 		Location: storage.GPSPoint{
 			Latitude:  req.Gateway.Location.Latitude,
 			Longitude: req.Gateway.Location.Longitude,
 		},
 		Altitude: req.Gateway.Location.Altitude,
 	}
-	if len(req.Gateway.GatewayProfileId) != 0 {
+
+	// Gateway ID
+	copy(gw.GatewayID[:], req.Gateway.Id)
+
+	// Gateway-profile ID.
+	if b := req.Gateway.GatewayProfileId; len(b) != 0 {
+		var gpID uuid.UUID
+		copy(gpID[:], b)
 		gw.GatewayProfileID = &gpID
+	}
+
+	// FPGA ID.
+	if b := req.Gateway.FpgaId; len(b) != 0 {
+		var fpgaID lorawan.EUI64
+		copy(fpgaID[:], b)
+		gw.FPGAID = &fpgaID
+	}
+
+	// Fine-timestamp AES key.
+	if b := req.Gateway.FineTimestampAesKey; len(b) != 0 {
+		var key lorawan.AES128Key
+		copy(key[:], b)
+		gw.FineTimestampAESKey = &key
 	}
 
 	err := storage.CreateGateway(config.C.PostgreSQL.DB, &gw)
@@ -872,20 +887,38 @@ func (n *NetworkServerAPI) UpdateGateway(ctx context.Context, req *ns.UpdateGate
 	}
 
 	var id lorawan.EUI64
-	var gpID uuid.UUID
-
 	copy(id[:], req.Gateway.Id)
-	copy(gpID[:], req.Gateway.GatewayProfileId)
 
 	gw, err := storage.GetGateway(config.C.PostgreSQL.DB, id)
 	if err != nil {
 		return nil, errToRPCError(err)
 	}
 
-	if len(req.Gateway.GatewayProfileId) != 0 {
+	// Gateway-profile ID.
+	if b := req.Gateway.GatewayProfileId; len(b) != 0 {
+		var gpID uuid.UUID
+		copy(gpID[:], b)
 		gw.GatewayProfileID = &gpID
 	} else {
 		gw.GatewayProfileID = nil
+	}
+
+	// FPGA ID.
+	if b := req.Gateway.FpgaId; len(b) != 0 {
+		var fpgaID lorawan.EUI64
+		copy(fpgaID[:], b)
+		gw.FPGAID = &fpgaID
+	} else {
+		gw.FPGAID = nil
+	}
+
+	// Fine-timestamp AES key.
+	if b := req.Gateway.FineTimestampAesKey; len(b) != 0 {
+		var key lorawan.AES128Key
+		copy(key[:], b)
+		gw.FineTimestampAESKey = &key
+	} else {
+		gw.FineTimestampAESKey = nil
 	}
 
 	gw.Location = storage.GPSPoint{
@@ -1600,7 +1633,6 @@ func (n *NetworkServerAPI) GetVersion(ctx context.Context, req *empty.Empty) (*n
 }
 
 func gwToResp(gw storage.Gateway) *ns.GetGatewayResponse {
-
 	resp := ns.GetGatewayResponse{
 		Gateway: &ns.Gateway{
 			Id: gw.GatewayID[:],
@@ -1625,6 +1657,14 @@ func gwToResp(gw storage.Gateway) *ns.GetGatewayResponse {
 
 	if gw.GatewayProfileID != nil {
 		resp.Gateway.GatewayProfileId = gw.GatewayProfileID.Bytes()
+	}
+
+	if gw.FPGAID != nil {
+		resp.Gateway.FpgaId = gw.FPGAID[:]
+	}
+
+	if gw.FineTimestampAESKey != nil {
+		resp.Gateway.FineTimestampAesKey = gw.FineTimestampAESKey[:]
 	}
 
 	return &resp

@@ -39,14 +39,16 @@ func (l *GPSPoint) Scan(src interface{}) error {
 
 // Gateway represents a gateway.
 type Gateway struct {
-	GatewayID        lorawan.EUI64 `db:"gateway_id"`
-	CreatedAt        time.Time     `db:"created_at"`
-	UpdatedAt        time.Time     `db:"updated_at"`
-	FirstSeenAt      *time.Time    `db:"first_seen_at"`
-	LastSeenAt       *time.Time    `db:"last_seen_at"`
-	Location         GPSPoint      `db:"location"`
-	Altitude         float64       `db:"altitude"`
-	GatewayProfileID *uuid.UUID    `db:"gateway_profile_id"`
+	GatewayID           lorawan.EUI64      `db:"gateway_id"`
+	CreatedAt           time.Time          `db:"created_at"`
+	UpdatedAt           time.Time          `db:"updated_at"`
+	FirstSeenAt         *time.Time         `db:"first_seen_at"`
+	LastSeenAt          *time.Time         `db:"last_seen_at"`
+	Location            GPSPoint           `db:"location"`
+	Altitude            float64            `db:"altitude"`
+	GatewayProfileID    *uuid.UUID         `db:"gateway_profile_id"`
+	FineTimestampAESKey *lorawan.AES128Key `db:"fine_timestamp_aes_key"`
+	FPGAID              *lorawan.EUI64     `db:"fpga_id"`
 }
 
 // Validate validates the data of the gateway.
@@ -70,8 +72,10 @@ func CreateGateway(db sqlx.Execer, gw *Gateway) error {
 			last_seen_at,
 			location,
 			altitude,
-			gateway_profile_id
-		) values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			gateway_profile_id,
+			fine_timestamp_aes_key,
+			fpga_id
+		) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 		gw.GatewayID[:],
 		now,
 		now,
@@ -80,6 +84,8 @@ func CreateGateway(db sqlx.Execer, gw *Gateway) error {
 		gw.Location,
 		gw.Altitude,
 		gw.GatewayProfileID,
+		gw.FineTimestampAESKey,
+		gw.FPGAID,
 	)
 	if err != nil {
 		return handlePSQLError(err, "insert error")
@@ -114,7 +120,9 @@ func UpdateGateway(db sqlx.Execer, gw *Gateway) error {
 			last_seen_at = $4,
 			location = $5,
 			altitude = $6,
-			gateway_profile_id = $7
+			gateway_profile_id = $7,
+			fpga_id = $8,
+			fine_timestamp_aes_key = $9
 		where gateway_id = $1`,
 		gw.GatewayID[:],
 		now,
@@ -123,6 +131,8 @@ func UpdateGateway(db sqlx.Execer, gw *Gateway) error {
 		gw.Location,
 		gw.Altitude,
 		gw.GatewayProfileID,
+		gw.FPGAID,
+		gw.FineTimestampAESKey,
 	)
 	if err != nil {
 		return handlePSQLError(err, "update error")

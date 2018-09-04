@@ -58,6 +58,12 @@ func TestGateway(t *testing.T) {
 				gw.Location.Longitude = 5.56789012
 				gw.Altitude = 100.5
 
+				fpgaID := lorawan.EUI64{1, 2, 3, 4, 5, 6, 7, 8}
+				ftKey := lorawan.AES128Key{1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8}
+
+				gw.FPGAID = &fpgaID
+				gw.FineTimestampAESKey = &ftKey
+
 				So(UpdateGateway(db, &gw), ShouldBeNil)
 
 				gw2, err := GetGateway(db, gw.GatewayID)
