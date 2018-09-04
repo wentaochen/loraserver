@@ -848,7 +848,7 @@ func TestNetworkServerAPI(t *testing.T) {
 				now := time.Now().UTC()
 				_, err := db.Exec(`
 		                   insert into gateway_stats (
-		                       mac,
+		                       gateway_id,
 		                       "timestamp",
 		                       "interval",
 		                       rx_packets_received,

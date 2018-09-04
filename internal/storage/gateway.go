@@ -39,7 +39,7 @@ func (l *GPSPoint) Scan(src interface{}) error {
 
 // Gateway represents a gateway.
 type Gateway struct {
-	MAC              lorawan.EUI64 `db:"mac"`
+	GatewayID        lorawan.EUI64 `db:"gateway_id"`
 	CreatedAt        time.Time     `db:"created_at"`
 	UpdatedAt        time.Time     `db:"updated_at"`
 	FirstSeenAt      *time.Time    `db:"first_seen_at"`
@@ -63,7 +63,7 @@ func CreateGateway(db sqlx.Execer, gw *Gateway) error {
 	now := time.Now()
 	_, err := db.Exec(`
 		insert into gateway (
-			mac,
+			gateway_id,
 			created_at,
 			updated_at,
 			first_seen_at,
@@ -72,7 +72,7 @@ func CreateGateway(db sqlx.Execer, gw *Gateway) error {
 			altitude,
 			gateway_profile_id
 		) values ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		gw.MAC[:],
+		gw.GatewayID[:],
 		now,
 		now,
 		gw.FirstSeenAt,
@@ -86,14 +86,14 @@ func CreateGateway(db sqlx.Execer, gw *Gateway) error {
 	}
 	gw.CreatedAt = now
 	gw.UpdatedAt = now
-	log.WithField("mac", gw.MAC).Info("gateway created")
+	log.WithField("gateway_id", gw.GatewayID).Info("gateway created")
 	return nil
 }
 
-// GetGateway returns the gateway for the given MAC.
-func GetGateway(db sqlx.Queryer, mac lorawan.EUI64) (Gateway, error) {
+// GetGateway returns the gateway for the given Gateway ID.
+func GetGateway(db sqlx.Queryer, id lorawan.EUI64) (Gateway, error) {
 	var gw Gateway
-	err := sqlx.Get(db, &gw, "select * from gateway where mac = $1", mac[:])
+	err := sqlx.Get(db, &gw, "select * from gateway where gateway_id = $1", id[:])
 	if err != nil {
 		return gw, handlePSQLError(err, "select error")
 	}
@@ -115,8 +115,8 @@ func UpdateGateway(db sqlx.Execer, gw *Gateway) error {
 			location = $5,
 			altitude = $6,
 			gateway_profile_id = $7
-		where mac = $1`,
-		gw.MAC[:],
+		where gateway_id = $1`,
+		gw.GatewayID[:],
 		now,
 		gw.FirstSeenAt,
 		gw.LastSeenAt,
@@ -135,13 +135,13 @@ func UpdateGateway(db sqlx.Execer, gw *Gateway) error {
 		return ErrDoesNotExist
 	}
 	gw.UpdatedAt = now
-	log.WithField("mac", gw.MAC).Info("gateway updated")
+	log.WithField("gateway_id", gw.GatewayID).Info("gateway updated")
 	return nil
 }
 
-// DeleteGateway deletes the gateway matching the given MAC.
-func DeleteGateway(db sqlx.Execer, mac lorawan.EUI64) error {
-	res, err := db.Exec("delete from gateway where mac = $1", mac[:])
+// DeleteGateway deletes the gateway matching the given Gateway ID.
+func DeleteGateway(db sqlx.Execer, id lorawan.EUI64) error {
+	res, err := db.Exec("delete from gateway where gateway_id = $1", id[:])
 	if err != nil {
 		return handlePSQLError(err, "delete error")
 	}
@@ -152,30 +152,30 @@ func DeleteGateway(db sqlx.Execer, mac lorawan.EUI64) error {
 	if ra == 0 {
 		return ErrDoesNotExist
 	}
-	log.WithField("mac", mac).Info("gateway deleted")
+	log.WithField("gateway_id", id).Info("gateway deleted")
 	return nil
 }
 
-// GetGatewaysForMACs returns a map of gateways given a slice of MACs.
-func GetGatewaysForMACs(db sqlx.Queryer, macs []lorawan.EUI64) (map[lorawan.EUI64]Gateway, error) {
+// GetGatewaysForIDs returns a map of gateways given a slice of IDs.
+func GetGatewaysForIDs(db sqlx.Queryer, ids []lorawan.EUI64) (map[lorawan.EUI64]Gateway, error) {
 	out := make(map[lorawan.EUI64]Gateway)
-	var macsB [][]byte
-	for i := range macs {
-		macsB = append(macsB, macs[i][:])
+	var idsB [][]byte
+	for i := range ids {
+		idsB = append(idsB, ids[i][:])
 	}
 
 	var gws []Gateway
-	err := sqlx.Select(db, &gws, "select * from gateway where mac = any($1)", pq.ByteaArray(macsB))
+	err := sqlx.Select(db, &gws, "select * from gateway where gateway_id = any($1)", pq.ByteaArray(idsB))
 	if err != nil {
 		return nil, handlePSQLError(err, "select error")
 	}
 
-	if len(gws) != len(macs) {
-		return nil, fmt.Errorf("expected %d gateways, got %d", len(macs), len(out))
+	if len(gws) != len(ids) {
+		return nil, fmt.Errorf("expected %d gateways, got %d", len(ids), len(out))
 	}
 
 	for i := range gws {
-		out[gws[i].MAC] = gws[i]
+		out[gws[i].GatewayID] = gws[i]
 	}
 
 	return out, nil

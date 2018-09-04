@@ -20,7 +20,7 @@ type UplinkTest struct {
 func (t *UplinkTest) SetupTest() {
 	t.UplinkIntegrationTestSuite.SetupTest()
 
-	t.CreateGateway(storage.Gateway{MAC: lorawan.EUI64{8, 7, 6, 5, 4, 3, 2, 1}})
+	t.CreateGateway(storage.Gateway{GatewayID: lorawan.EUI64{8, 7, 6, 5, 4, 3, 2, 1}})
 	t.CreateDevice(storage.Device{DevEUI: lorawan.EUI64{1, 2, 3, 4, 5, 6, 7, 8}})
 	t.CreateDeviceSession(storage.DeviceSession{})
 }
@@ -39,7 +39,7 @@ func (t *UplinkTest) TestDeviceGatewayRXInfoSetHasBeenStored() {
 		},
 	}
 	rxInfo := gw.UplinkRXInfo{
-		GatewayId: t.Gateway.MAC[:],
+		GatewayId: t.Gateway.GatewayID[:],
 		Rssi:      -60,
 		LoraSnr:   5.5,
 	}
@@ -53,7 +53,7 @@ func (t *UplinkTest) TestDeviceGatewayRXInfoSetHasBeenStored() {
 		DR:     2,
 		Items: []storage.DeviceGatewayRXInfo{
 			{
-				GatewayID: t.Gateway.MAC,
+				GatewayID: t.Gateway.GatewayID,
 				RSSI:      -60,
 				LoRaSNR:   5.5,
 			},

@@ -20,7 +20,7 @@ func TestGateway(t *testing.T) {
 
 		Convey("When creating a gateway", func() {
 			gw := Gateway{
-				MAC: lorawan.EUI64{29, 238, 8, 208, 182, 145, 209, 73},
+				GatewayID: lorawan.EUI64{29, 238, 8, 208, 182, 145, 209, 73},
 				Location: GPSPoint{
 					Latitude:  1.23456789,
 					Longitude: 4.56789012,
@@ -34,7 +34,7 @@ func TestGateway(t *testing.T) {
 			gw.UpdatedAt = gw.UpdatedAt.UTC().Truncate(time.Millisecond)
 
 			Convey("Then it can be retrieved", func() {
-				gw2, err := GetGateway(db, gw.MAC)
+				gw2, err := GetGateway(db, gw.GatewayID)
 				So(err, ShouldBeNil)
 
 				gw2.CreatedAt = gw2.CreatedAt.UTC().Truncate(time.Millisecond)
@@ -42,11 +42,11 @@ func TestGateway(t *testing.T) {
 
 				So(gw2, ShouldResemble, gw)
 
-				gws, err := GetGatewaysForMACs(db, []lorawan.EUI64{gw.MAC})
+				gws, err := GetGatewaysForIDs(db, []lorawan.EUI64{gw.GatewayID})
 				So(err, ShouldBeNil)
-				gw3, ok := gws[gw.MAC]
+				gw3, ok := gws[gw.GatewayID]
 				So(ok, ShouldBeTrue)
-				So(gw3.MAC, ShouldResemble, gw.MAC)
+				So(gw3.GatewayID, ShouldResemble, gw.GatewayID)
 			})
 
 			Convey("Then it can be updated", func() {
@@ -60,10 +60,10 @@ func TestGateway(t *testing.T) {
 
 				So(UpdateGateway(db, &gw), ShouldBeNil)
 
-				gw2, err := GetGateway(db, gw.MAC)
+				gw2, err := GetGateway(db, gw.GatewayID)
 				So(err, ShouldBeNil)
 
-				So(gw2.MAC, ShouldEqual, gw.MAC)
+				So(gw2.GatewayID, ShouldEqual, gw.GatewayID)
 				So(gw2.CreatedAt.UTC().Truncate(time.Millisecond), ShouldResemble, gw.CreatedAt.UTC())
 				So(gw2.UpdatedAt.UTC().Truncate(time.Millisecond), ShouldResemble, gw.UpdatedAt.UTC().Truncate(time.Millisecond))
 				So(gw2.FirstSeenAt.UTC().Truncate(time.Millisecond), ShouldResemble, gw.FirstSeenAt.UTC().Truncate(time.Millisecond))
@@ -73,8 +73,8 @@ func TestGateway(t *testing.T) {
 			})
 
 			Convey("Then it can be deleted", func() {
-				So(DeleteGateway(db, gw.MAC), ShouldBeNil)
-				_, err := GetGateway(db, gw.MAC)
+				So(DeleteGateway(db, gw.GatewayID), ShouldBeNil)
+				_, err := GetGateway(db, gw.GatewayID)
 				So(err, ShouldResemble, ErrDoesNotExist)
 			})
 		})
