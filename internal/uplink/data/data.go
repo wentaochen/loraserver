@@ -379,35 +379,7 @@ func sendFRMPayloadToApplicationServer(ctx *dataContext) error {
 	}
 
 	if ctx.ServiceProfile.AddGWMetadata {
-		var ids []lorawan.EUI64
 		publishDataUpReq.RxInfo = ctx.RXPacket.RXInfoSet
-
-		// get gateway info
-		for i := range publishDataUpReq.RxInfo {
-			var id lorawan.EUI64
-			copy(id[:], publishDataUpReq.RxInfo[i].GatewayId)
-			ids = append(ids, id)
-		}
-
-		gws, err := storage.GetGatewaysForIDs(config.C.PostgreSQL.DB, ids)
-		if err != nil {
-			fmt.Println(err)
-			log.WithField("gateway_ids", ids).Warningf("get gateways for gateway ids error: %s", err)
-			gws = make(map[lorawan.EUI64]storage.Gateway)
-		}
-
-		for i := range publishDataUpReq.RxInfo {
-			var id lorawan.EUI64
-			copy(id[:], publishDataUpReq.RxInfo[i].GatewayId)
-
-			if gw, ok := gws[id]; ok {
-				publishDataUpReq.RxInfo[i].Location = &common.Location{
-					Latitude:  gw.Location.Latitude,
-					Longitude: gw.Location.Longitude,
-					Altitude:  gw.Altitude,
-				}
-			}
-		}
 	}
 
 	if ctx.MACPayload.FPort != nil {

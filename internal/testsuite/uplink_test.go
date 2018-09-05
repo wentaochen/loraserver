@@ -2270,7 +2270,10 @@ func runUplinkTests(asClient *test.ApplicationClient, tests []uplinkTestCase) {
 				Convey("Then the expected rx-info is published to the network-controller", func() {
 					So(config.C.NetworkController.Client.(*test.NetworkControllerClient).HandleRXInfoChan, ShouldHaveLength, 1)
 					pl := <-config.C.NetworkController.Client.(*test.NetworkControllerClient).HandleRXInfoChan
-					So(proto.Equal(&pl, t.ExpectedControllerHandleRXInfo), ShouldBeTrue)
+					if !proto.Equal(&pl, t.ExpectedControllerHandleRXInfo) {
+						// when it is not equal, this will print the diff :-)
+						So(&pl, ShouldResemble, t.ExpectedControllerHandleRXInfo)
+					}
 				})
 			} else {
 				So(config.C.NetworkController.Client.(*test.NetworkControllerClient).HandleRXInfoChan, ShouldHaveLength, 0)

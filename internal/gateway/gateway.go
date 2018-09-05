@@ -1,12 +1,22 @@
 package gateway
 
 import (
+	"crypto/aes"
+	"encoding/binary"
+	"fmt"
 	"sync"
+	"time"
 
+	"github.com/golang/protobuf/ptypes"
+	"github.com/gomodule/redigo/redis"
+	"github.com/jmoiron/sqlx"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/brocaar/loraserver/api/common"
 	"github.com/brocaar/loraserver/api/gw"
 	"github.com/brocaar/loraserver/internal/config"
+	"github.com/brocaar/loraserver/internal/helpers"
 	"github.com/brocaar/loraserver/internal/storage"
 	"github.com/brocaar/lorawan"
 )
@@ -56,4 +66,114 @@ func handleStatsPackets(wg *sync.WaitGroup) {
 			}
 		}(statsPacket)
 	}
+}
+
+// UpdateMetaDataInRxInfoSet updates the gateway meta-data in the
+// given rx-info set. It will:
+//   - add the gateway location
+//   - set the FPGA id if available
+//   - decrypt the fine-timestamp (if available and AES key is set)
+func UpdateMetaDataInRxInfoSet(db sqlx.Queryer, p *redis.Pool, rxInfo []*gw.UplinkRXInfo) error {
+	for i := range rxInfo {
+		id := helpers.GetGatewayID(rxInfo[i])
+		g, err := storage.GetAndCacheGateway(db, p, id)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"gateway_id": id,
+			}).WithError(err).Error("get gateway error")
+			continue
+		}
+
+		// set gateway location
+		rxInfo[i].Location = &common.Location{
+			Latitude:  g.Location.Latitude,
+			Longitude: g.Location.Longitude,
+			Altitude:  g.Altitude,
+		}
+
+		// set FPGA ID
+		// this is useful when the AES decryption key is not set as it
+		// indicates which key to use for decryption
+		if rxInfo[i].FineTimestampType == gw.FineTimestampType_ENCRYPTED {
+			tsInfo := rxInfo[i].GetEncryptedFineTimestamp()
+			if tsInfo == nil {
+				log.WithFields(log.Fields{
+					"gateway_id": id,
+				}).Error("encrypted_fine_timestamp must not be nil")
+				continue
+			}
+
+			if len(tsInfo.FpgaId) == 0 && g.FPGAID != nil {
+				tsInfo.FpgaId = g.FPGAID[:]
+			}
+		}
+
+		// decrypt fine-timestamp when the AES key is known
+		if rxInfo[i].FineTimestampType == gw.FineTimestampType_ENCRYPTED && g.FineTimestampAESKey != nil {
+			tsInfo := rxInfo[i].GetEncryptedFineTimestamp()
+			if tsInfo == nil {
+				log.WithFields(log.Fields{
+					"gateway_id": id,
+				}).Error("encrypted_fine_timestamp must not be nil")
+				continue
+			}
+
+			if rxInfo[i].Time == nil {
+				log.WithFields(log.Fields{
+					"gateway_id": id,
+				}).Error("time must not be nil")
+				continue
+			}
+
+			rxTime, err := ptypes.Timestamp(rxInfo[i].Time)
+			if err != nil {
+				log.WithFields(log.Fields{
+					"gateway_id": id,
+				}).WithError(err).Error("get timestamp error")
+			}
+
+			plainTS, err := decryptFineTimestamp(*g.FineTimestampAESKey, rxTime, *tsInfo)
+			if err != nil {
+				log.WithFields(log.Fields{
+					"gateway_id": id,
+				}).WithError(err).Error("decrypt fine-timestamp error")
+				continue
+			}
+
+			rxInfo[i].FineTimestampType = gw.FineTimestampType_PLAIN
+			rxInfo[i].FineTimestamp = &gw.UplinkRXInfo_PlainFineTimestamp{
+				PlainFineTimestamp: &plainTS,
+			}
+		}
+	}
+
+	return nil
+}
+
+func decryptFineTimestamp(key lorawan.AES128Key, rxTime time.Time, ts gw.EncryptedFineTimestamp) (gw.PlainFineTimestamp, error) {
+	var plainTS gw.PlainFineTimestamp
+
+	block, err := aes.NewCipher(key[:])
+	if err != nil {
+		return plainTS, errors.Wrap(err, "new cipher error")
+	}
+
+	if len(ts.EncryptedNs) != block.BlockSize() {
+		return plainTS, fmt.Errorf("invalid block-size (%d) or ciphertext length (%d)", block.BlockSize(), len(ts.EncryptedNs))
+	}
+
+	ct := make([]byte, block.BlockSize())
+	block.Decrypt(ct, ts.EncryptedNs)
+
+	nanoSec := binary.BigEndian.Uint64(ct[len(ct)-8:])
+	nanoSec = nanoSec / 32
+
+	rxTime = rxTime.Add(time.Duration(nanoSec) * time.Nanosecond)
+
+	plainTS.Time, err = ptypes.TimestampProto(rxTime)
+	if err != nil {
+		return plainTS, errors.Wrap(err, "timestamp proto error")
+	}
+
+	return plainTS, nil
 }
